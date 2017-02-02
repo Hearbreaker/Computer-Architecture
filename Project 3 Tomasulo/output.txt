@@ -1,0 +1,567 @@
+106a107
+> /* ECE552 Assignment 3 - BEGIN CODE */
+121,142c122,124
+< 		int i; //Check pipeline is empty. loop through all queues, FU, RS.
+< 		for(i = 0; i < INSTR_QUEUE_SIZE; i++){
+< 			if(instr_queue[i] != NULL){ //Check queue empty
+< 				return false;
+< 			}	
+< 		}
+< 		for(i = 0; i < RESERV_INT_SIZE; i++){
+< 			if(reservINT[i] != NULL){ //Check INT RS empty
+< 				return false;
+< 			}	
+< 		}
+< 		for(i = 0; i < FU_INT_SIZE; i++){
+< 			if(fuINT[i] != NULL){ //Check INT FU empty
+< 				return false;
+< 			}	
+< 		}
+< 		for(i = 0; i < RESERV_FP_SIZE; i++){ //Check FP RS empty
+< 			if(reservFP[i] != NULL){
+< 				return false;
+< 			}	
+< 		}
+< 		if(fuFP[0] != NULL) //Check FP FU empty
+---
+> 	int i;
+> 	for(i = 0; i < INSTR_QUEUE_SIZE; i++){
+> 		if(instr_queue[i] != NULL)
+143a126
+> 	}
+145,146c128,148
+< 		return true; 
+< 		//ECE552: you can change this as needed; we've added this so the code provided to you compiles
+---
+> 	for(i = 0; i < RESERV_INT_SIZE; i++){
+> 		if(reservINT[i] != NULL)
+> 			return false;
+> 	}
+> 	
+> 	for(i = 0; i < RESERV_FP_SIZE; i++){
+> 		if(reservFP[i] != NULL)
+> 			return false;
+> 	}
+> 
+> 	for(i = 0; i <  FU_FP_SIZE; i++){
+> 		if(fuFP[i] != NULL)
+> 			return false;
+> 	}
+> 	
+> 	for (i = 0; i < FU_INT_SIZE; i++){
+> 		if(fuINT[i] != NULL)
+> 			return false;
+> 	}
+> 
+> 	return true; //ECE552: you can change this as needed; we've added this so the code provided to you compiles
+160,163c162,166
+< 	//Clear hazards and map table
+< 	int i; //RS index
+< 	int j; //Q dependency index
+< 	
+---
+> 
+> 	//For CDB to retire, clear the tags of instructions who are waiting for CDB value
+> 	//Clear map table and CDB itself
+> 
+> 	int i,j;
+165,173c168,174
+< 		//Clear dependencies in reservation table. Value is ready if other instructions need.
+< 		if(USES_INT_FU(commonDataBus->op)){ //INT
+< 			for(i = 0; i < RESERV_INT_SIZE; i++){
+< 				if(reservINT[i] != NULL){
+< 					for(j = 0; j < 3; j++){
+< 						if(commonDataBus == reservINT[i]->Q[j]){
+< 							reservINT[i]->Q[j] = NULL;
+< 						}
+< 					}	
+---
+> 		// clear tags
+> 		for(i = 0; i < RESERV_INT_SIZE; i++){
+> 			if(reservINT[i] != NULL){
+> 				for(j = 0; j < 3; j++){
+> 					if(reservINT[i]->Q[j] == commonDataBus){
+> 						reservINT[i]->Q[j] = NULL;
+> 					}
+177,184c178,184
+< 		else{ //FP
+< 			for(i = 0; i < RESERV_FP_SIZE; i++){
+< 				if(reservFP[i] != NULL){
+< 					for(j = 0; j < 3; j++){
+< 						if(commonDataBus == reservFP[i]->Q[j]){ 
+< 							reservFP[i]->Q[j] = NULL;
+< 						}
+< 					}	
+---
+> 
+> 		for(i = 0; i < RESERV_FP_SIZE; i++){
+> 			if(reservFP[i] != NULL){
+> 				for(j = 0; j < 3; j++){
+> 					if(reservFP[i]->Q[j] == commonDataBus){
+> 						reservFP[i]->Q[j] = NULL;
+> 					}
+188c188,189
+< 		//Clear the map table.
+---
+> 
+> 		//clear map table
+190,193c191,197
+< 			if(commonDataBus->r_out[i] != DNA && (map_table[commonDataBus->r_out[i]] == commonDataBus)){
+< 				map_table[commonDataBus->r_out[i]] = NULL;	
+< 			}	
+< 		}		  
+---
+> 			if(commonDataBus->r_out[i] != DNA){
+> 				if(map_table[commonDataBus->r_out[i]] == commonDataBus){
+> 					map_table[commonDataBus->r_out[i]] = NULL;	//clear map table
+> 				}
+> 			}
+> 		}
+> 
+196,199d199
+< 	else
+< 		return;
+< 	
+< 	return;
+200a201
+> 	return;
+212c213
+< void execute_To_CDB(int current_cycle) { //CHANGE******************************************************
+---
+> void execute_To_CDB(int current_cycle) {
+215,223c216,219
+< 	//Check if FU unit is done
+< 	//if done. Free up FU and RS.
+< 	
+< 	
+< 	//INT OPERATIONS
+< 	int i; //FU_index
+< 	int j; //RS_index
+< 	instruction_t* to_cdb = NULL;
+< 	
+---
+> 
+> 	instruction_t** CDBinst = NULL;	//double pointer holds the instruction that has the priority to write to the CDB
+> 
+> 	int i,j;
+227d222
+< 				//printf("index: %d\n", fuINT[i]->index);
+237,247c232,234
+< 				else{
+< 					//printf("hello1\n");
+< 					if (to_cdb != NULL){//NOT A STORE
+< 						//printf("NOT STORE\n");
+< 						if(to_cdb->index > fuINT[i]->index) //CDB oldest instruction. Therefore smallest index
+< 							to_cdb = fuINT[i];
+< 					}
+< 					else{
+< 						//printf("int\n");
+< 						to_cdb = fuINT[i];
+< 					}
+---
+> 				else if(CDBinst == NULL || (CDBinst != NULL && (*CDBinst)->index > fuINT[i]->index)){	//if an older instruction has been found
+> 					CDBinst = &fuINT[i];	// the older instruction has the priority to write to CDB
+> 					assert(WRITES_CDB((*CDBinst)->op));
+249,250c236,237
+< 			}	
+< 		}	
+---
+> 			}
+> 		}
+252d238
+< 
+254d239
+< 	//FP OPERATIONS
+256,257c241
+< 		if(fuFP[i] != NULL){//FIND executing OP
+< 			
+---
+> 		if(fuFP[i] != NULL){
+259,269c243,245
+< 			
+< 				if(to_cdb != NULL){
+< 				
+< 					if(to_cdb->index > fuFP[i]->index) //CDB oldest instruction. Therefore smallest index
+< 						to_cdb = fuFP[i];
+< 						fuFP[i] = NULL;
+< 				}
+< 				else{ //NULL. Just set.
+< 				
+< 					to_cdb = fuFP[i];
+< 					fuFP[i] = NULL;
+---
+> 				if (CDBinst == NULL || (CDBinst != NULL && (*CDBinst)->index > fuFP[i]->index)){
+> 					CDBinst = &fuFP[i];
+> 					assert(WRITES_CDB((*CDBinst)->op));
+274,277c250,251
+< 	//printf("%p", to_cdb);
+< 	if(to_cdb == NULL){// No instructions finished
+< 		//printf("exit1\n");
+< 		return;
+---
+> 	
+> 	if(CDBinst != NULL){
+279,282c253
+< 	}
+< 	else{ //Send to cdb. Clear RS of FP. Clear RS and FU of int.
+< 		//printf("hello8\n");
+< 		commonDataBus = to_cdb;
+---
+> 		commonDataBus = *CDBinst;
+285,288c256,262
+< 		if(USES_FP_FU(to_cdb->op)){//Clear RS of FP.
+< 			for(j = 0; j < RESERV_FP_SIZE; j++){
+< 				if(reservFP[j] == to_cdb){
+< 					reservFP[j] = NULL;
+---
+> 		//clear RS
+> 		if(USES_INT_FU(commonDataBus->op)){
+> 			for(i = 0 ; i < RESERV_INT_SIZE; i++){
+> 				if(reservINT[i] == commonDataBus){
+> 					reservINT[i] = NULL;
+> 					update_RS(i, 1);
+> 					break;
+291d264
+< 			
+293,301c266,271
+< 		else{ //Clear RS and FU of int.
+< 			for(i = 0; i < FU_INT_SIZE; i++){
+< 				if(fuINT[i] == to_cdb){
+< 					fuINT[i] = NULL;
+< 				}
+< 			}
+< 			for(j = 0; j < RESERV_INT_SIZE; j++){
+< 				if(reservINT[j] == to_cdb){
+< 					reservINT[j] = NULL;
+---
+> 		else{
+> 			for(i = 0 ; i < RESERV_FP_SIZE; i++){
+> 				if(reservFP[i] == commonDataBus){
+> 					reservFP[i] = NULL;
+> 					update_RS(i, 0);
+> 					break;
+305c275,277
+< 		
+---
+> 
+> 		//clear FU
+> 		*CDBinst = NULL;
+308a281,299
+> /*
+>  * Helper function for execute_To_CDB
+>  * Update the RS when some RS entry has been cleared
+>  */
+> void update_RS(int i, int is_int){// i is the index of empty spot that has been cleared
+> 	int j;
+> 	if(is_int){//int RS case
+> 		for(j = i; j < RESERV_INT_SIZE - 1; j++){
+> 			reservINT[j] = reservINT[j+1];
+> 			reservINT[j+1] = NULL;
+> 		}	
+> 	}
+> 	else{//FP RS case
+> 		if(i == 0 && reservFP[1] != NULL){
+> 			reservFP[i] = reservFP[1];
+> 			reservFP[1] = NULL;
+> 		}
+> 	}
+> }
+321,346c312,329
+< 	//INT
+< 	int FU_index; 
+< 	int RS_index;
+< 	bool found = FALSE;
+< 	instruction_t* to_execute = NULL;
+< 	
+< 	for(FU_index = 0; FU_index < FU_INT_SIZE; FU_index++){ //Check if FU is ready.
+< 		if(fuINT[FU_index] == NULL){
+< 			found = TRUE;
+< 			//printf("%d", FU_index);
+< 			break;
+< 		}
+< 		
+< 	}
+< 	if(found == TRUE){
+< 		 //Check if OP ready.
+< 		for(RS_index = 0; RS_index < RESERV_INT_SIZE; RS_index++){ 
+< 			if(reservINT[RS_index] != NULL && (reservINT[RS_index]->Q[0] == NULL && reservINT[RS_index]->Q[1] == NULL && reservINT[RS_index]->Q[2] == NULL && reservINT[RS_index]->tom_execute_cycle == 0)){ //Check Dependency
+< 				if(to_execute != NULL){
+< 					if(to_execute->index > reservINT[RS_index]->index) //Execute oldest instruction. Therefore smallest index
+< 						to_execute = reservINT[RS_index];
+< 				}
+< 				else{
+< 					//printf("int\n");
+< 					to_execute = reservINT[RS_index];
+< 					
+---
+> 
+>   /* ECE552: YOUR CODE GOES HERE */
+> 
+> 	int i = 0;
+> 	int j = 0;
+> L1:	while(i < FU_INT_SIZE){
+> 		if(fuINT[i] == NULL){	// check if functional unit is available
+> 			while(j < RESERV_INT_SIZE){
+> 				if(reservINT[j] != NULL){
+> 					if(reservINT[j]->Q[0] == NULL && reservINT[j]->Q[1] == NULL && reservINT[j]->Q[2] == NULL && reservINT[j]->tom_execute_cycle == 0){//check dependency tags
+> 						   // put instruction into the functional unit
+> 						   fuINT[i] = reservINT[j];
+> 						   // set tom_execute_cycle to current cycle
+> 						   fuINT[i]->tom_execute_cycle = current_cycle;
+> 						   i++;
+> 						   j++;
+> 						   goto L1;
+> 					}
+347a331
+> 				j++;
+349a334
+> 		i++;
+351,380c336,351
+< 		
+< 	if(to_execute != NULL) {
+< 		fuINT[FU_index] = to_execute;
+< 		// set tom_execute_cycle to current cycle
+< 		fuINT[FU_index]->tom_execute_cycle = current_cycle;
+< 	}
+< 	
+< 	//FP 
+< 	FU_index = 0; 
+< 	RS_index = 0;
+< 	found = FALSE;
+< 	to_execute = NULL;
+< 	
+< 	for(FU_index = 0; FU_index < FU_FP_SIZE; FU_index++){ //Check if FU is ready.
+< 		if(fuFP[FU_index] == NULL){
+< 			found = TRUE;
+< 			break;
+< 		}
+< 		
+< 	}
+< 	if(found == TRUE){
+< 		 //Check if OP ready.
+< 		for(RS_index = 0; RS_index < RESERV_FP_SIZE; RS_index++){ 
+< 			
+< 			if(reservFP[RS_index] != NULL && (reservFP[RS_index]->Q[0] == NULL && reservFP[RS_index]->Q[1] == NULL && reservFP[RS_index]->Q[2] == NULL && reservFP[RS_index]->tom_execute_cycle == 0)){ //Check Dependency
+< 				printf("hello");
+< 				if(to_execute != NULL){
+< 					if(to_execute->index > reservFP[RS_index]->index) //Execute oldest instruction. Therefore smallest index
+< 						to_execute = reservFP[RS_index];
+< 					printf("hello");
+---
+> 	
+> 	j = 0;
+> 	i = 0;
+> L2:	while(i < FU_FP_SIZE){
+> 		if(fuFP[i] == NULL){
+> 			while(j < RESERV_FP_SIZE){
+> 				if(reservFP[j] != NULL){
+> 					if(reservFP[j]->Q[0] == NULL && reservFP[j]->Q[1] == NULL && reservFP[j]->Q[2] == NULL && reservFP[j]->tom_execute_cycle == 0){
+> 						   // put instruction into the functional unit
+> 						   fuFP[i] = reservFP[j];
+> 						   // set tom_execute_cycle to current cycle
+> 						   fuFP[i]->tom_execute_cycle = current_cycle;
+> 						   i++;
+> 						   j++;
+> 						   goto L2;
+> 					}
+382,385c353
+< 				else{
+< 					printf("fp\n");
+< 					to_execute = reservFP[RS_index];
+< 				}	
+---
+> 				j++;
+387a356
+> 		i++;
+389,404c358
+< 	else {
+< 		//printf("exit1\n");
+< 		return;
+< 	}
+< 		
+< 		
+< 	if(to_execute == NULL) {
+< 		//printf("exit2\n");
+< 		return;
+< 	}
+< 	else{
+< 		fuFP[FU_index] = to_execute;
+< 		// set tom_execute_cycle to current cycle
+< 		fuFP[FU_index]->tom_execute_cycle = current_cycle;
+< 	}
+< 	//printf("exit\n");
+---
+> 
+416c370
+< 	
+---
+> 
+419,423c373,374
+< 	//skip branches
+< 	//determine the type and place into correct RS
+< 	//update the map table and dependencies
+< 	int i;
+< 	if(instr_queue[0] == NULL){ //Queue empty. Nothing to do.
+---
+> 	//check if IFQ empty
+> 	if(instr_queue[0] == NULL){
+427c378
+< 	//check if next instruction is a branch. 
+---
+> 	//check if next instruction is a branch
+429,434c380
+< 		instr_queue[0] = NULL; //If branch. Move onto next instruction
+< 		for(i = 0; i < instr_queue_size - 1; i++){
+< 			instr_queue[i] = instr_queue[i+1];
+< 			instr_queue[i+1] = NULL;
+< 		}
+< 		instr_queue_size--;	
+---
+> 		update_IFQ();	//pop out the branch instruction from the IFQ head
+438c384,385
+< 	bool full = TRUE; //Check if RS is set.
+---
+> 	instruction_t* temp = NULL;
+> 	int i;
+443c390
+< 				full = FALSE;
+---
+> 				temp = instr_queue[0];
+452c399
+< 				full = FALSE; 
+---
+> 				temp = instr_queue[0];
+458,459c405,411
+< 	if(full != TRUE){	//RS is set. Update map table and dependency tags.
+< 		instr_queue[0]->tom_issue_cycle = current_cycle;
+---
+> 	if(temp == NULL){	//RS is full, then stall the IFQ
+> 		return;
+> 	}
+> 	else{
+> 		update_IFQ();
+> 		temp->tom_issue_cycle = current_cycle;
+> 		
+461,462c413,414
+< 			if(instr_queue[0]->r_in[i] != DNA){ //Check which source registers are being used.
+< 				instr_queue[0]->Q[i] = map_table[instr_queue[0]->r_in[i]];	//Set dependency tags with source registers instruction
+---
+> 			if(temp->r_in[i] != DNA){
+> 				temp->Q[i] = map_table[temp->r_in[i]];	//set the dependency tags
+467,468c419,420
+< 			if(instr_queue[0]->r_out[i] != DNA){ //Check which target registers are being used.
+< 				map_table[instr_queue[0]->r_out[i]] = instr_queue[0];	//Set map table with target register instruction
+---
+> 			if(temp->r_out[i] != DNA){
+> 				map_table[temp->r_out[i]] = temp;	//update the map_table
+471,476d422
+< 		instr_queue[0] = NULL;
+< 		for(i = 0; i < instr_queue_size - 1; i++){
+< 			instr_queue[i] = instr_queue[i+1];
+< 			instr_queue[i+1] = NULL;
+< 		}
+< 		instr_queue_size--;
+479a426
+> /* ECE552 Assignment 3 - BEGIN CODE */
+480a428,440
+> /*
+>  * Helper function for dispatch_To_issue
+>  * Pop out the first instruction in the IFQ and shifting the rest instructions to the head
+>  */
+> void update_IFQ(){
+> 	int i;
+> 	instr_queue[0] = NULL;
+> 	for(i = 0; i < instr_queue_size - 1; i++){
+> 		instr_queue[i] = instr_queue[i+1];
+> 		instr_queue[i+1] = NULL;
+> 	}
+> 	instr_queue_size--;
+> }
+482c442
+< 
+---
+> /* ECE552 Assignment 3 - END CODE */
+495,497c455,458
+< 	//Increment index and fetch. 
+< 	fetch_index++; 
+< 	while(IS_TRAP(get_instr(trace, fetch_index)->op))//If trap, keep fetching until not a trap.
+---
+>   
+> 	//use do while loop for consecutive trap instructions, if not a trap, then just increase fetch_index by 1
+> 
+> 	do{
+499,504d459
+< 	
+< 	if(instr_queue_size < INSTR_QUEUE_SIZE){ //Place into queue if empty.
+< 		if(fetch_index <= sim_num_insn){ 
+< 			instr_queue[instr_queue_size] = get_instr(trace, fetch_index);
+< 			//instr_queue[instr_queue_size]->index = fetch_index;
+< 		}
+506,507c461
+< 	
+< 	return;
+---
+> 	while(IS_TRAP(get_instr(trace, fetch_index)->op));
+510d463
+< 	
+524c477
+< 	  
+---
+>   
+526,531c479,483
+< 		fetch(trace);
+< 		if(instr_queue_size < INSTR_QUEUE_SIZE){
+< 			if(fetch_index <= sim_num_insn){ //Instruction is dispatched.
+< 				instr_queue[instr_queue_size]->tom_dispatch_cycle = current_cycle;
+< 				instr_queue_size++;
+< 			}
+---
+> 		fetch(trace);	//IFQ is not full
+> 		if(fetch_index <= sim_num_insn){
+> 			instr_queue[instr_queue_size] = get_instr(trace, fetch_index);
+> 			instr_queue[instr_queue_size]->tom_dispatch_cycle = current_cycle;
+> 			instr_queue_size++;
+534,536c486,488
+< 	
+< 
+< 	
+---
+> 	else{
+> 		// IFQ is full, just don't fetch
+> 	}
+538a491,492
+> /* ECE552 Assignment 3 - END CODE */
+> 
+580c534,539
+<   
+---
+>   /* ECE552 Assignment 3 - BEGIN CODE */
+> 
+>   //	print_all_instr(trace, sim_num_insn);	// for debugging
+> 
+>   /* ECE552 Assignment 3 - END CODE */
+> 
+584c543,548
+<      /* ECE552: YOUR CODE GOES HERE */
+---
+> 	  /* ECE552: YOUR CODE GOES HERE */
+> 
+> 	  /* ECE552 Assignment 3 - BEGIN CODE */
+> 
+> 	//	We run the functions in reverse order to avoid instructions go through all stages in one cycle
+> 	//	Also, in this case, it's easier to assign tom_cycles for each instruction
+590a555
+> 	  /* ECE552 Assignment 3 - END CODE */
+592,596c557,562
+<     if (is_simulation_done(sim_num_insn))
+<         break;
+<   }
+<   
+<   return cycle;
+---
+> 
+> 	if (is_simulation_done(sim_num_insn))
+> 		break;
+> 	}
+> 
+> 	return cycle;
