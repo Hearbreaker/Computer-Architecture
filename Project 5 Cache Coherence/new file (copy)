@@ -1,0 +1,233 @@
+transition(I, {Load, Ifetch}, IS_D) {
+		p_profileMiss;			//Cache miss (invalid block)
+		i_allocateL1CacheBlock;	//Allocate a cache block
+		as_issueGetS;			//Issue a request for GetS to the directory
+		v_allocateTBE;			//Allocate a TBE entry
+		m_popMandatoryQueue;	//Pop message from the mandatory queue
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ /* ECE552: Complete this section here */
+	
+	// 	Hit Scenario
+	transition({S, M, SM_AD, SM_A}, {Load, Ifetch}) {
+		r_load_hit;				//Data block is accessable, tell the core that the load has completed
+		m_popMandatoryQueue;	//Pop the message from the mandatory queue
+	}
+
+	transition(M, Store) {
+		s_store_hit;			//Data block is accessable, tell the core that the load has completed
+		m_popMandatoryQueue;	//Pop the message from the mandatory queue
+	}
+
+
+	// 	Stalls Scenario
+	transition(IS_D, {Load, Ifetch, Store, Inv, Replacement}) {
+		z_stall;
+	}
+
+	transition({SM_A, SM_AD}, {Store, Replacement, Fwd_GetS, Fwd_GetM}) {
+		z_stall;
+	}
+
+	transition({IM_AD, IM_A}, {Load, Ifetch, Store, Replacement, Fwd_GetS, Fwd_GetM}) {
+		z_stall;
+	}
+
+	transition({MI_A, SI_A, II_A}, {Load, Ifetch, Store, Replacement}) {
+		z_stall;
+	}
+
+
+    //	Transition & Action
+	
+	
+	transition(I, Store, IM_AD) {
+		p_profileMiss;			//Cache miss (invalid block)
+		i_allocateL1CacheBlock;	//Allocate a cache block
+		am_issueGetM;			//Issue a request for GetM to the directory
+		v_allocateTBE;			//Allocate a TBE entry
+		m_popMandatoryQueue;	//Pop message from the mandatory queue
+	}
+	
+	transition(I, Inv) {
+		fi_sendInvAck;				//send inv-ack
+		o_popForwardedRequestQueue;	//Pop the message from the forwardedRequest queue
+	}
+
+	transition(I, WB_Ack) {
+		o_popForwardedRequestQueue;	//Pop the message from the forwardedRequest queue
+	}
+	
+	transition(IS_D, {Data_from_Dir_No_Acks, Data_from_Owner}, S) {
+		u_writeDataToCache;		//Data reply received, copy the data to the previously cache entry
+		rx_load_hit;			//Tell the core the load has been completed
+		w_deallocateTBE;		//Block is in stable state, deallocate the TBE entry
+		n_popResponseQueue;		//Pop the message from the response queue
+	}
+	
+	transition(IM_A, Inv_Ack) {
+		q_updateAckCount;	//Update the # of pending acknowledgments in the TBE entry
+		n_popResponseQueue;	//Pop the message from the response queue
+	}
+
+	transition(IM_A, Inv_Ack_all, M) {
+		q_updateAckCount;	//Update the # of pending acknowledgments in the TBE entry
+		sx_store_hit;		//Tell the core that a store has completed
+		w_deallocateTBE;	//Block is in stable state, deallocate the TBE entry
+		n_popResponseQueue;	//Pop the message from the response queue
+	}
+
+	transition(IM_AD, Inv_Ack) {
+		q_updateAckCount;	//Update the # of pending acknowledgments in the TBE entry
+		n_popResponseQueue;	//Pop the message from the response queue
+	}
+	
+	transition(IM_AD, Data_from_Dir_Ack_Cnt, IM_A) {
+		u_writeDataToCache;	//Data reply received, but still wait for ACKs, just copy the data block to the previously cache entry
+		q_updateAckCount;	//Update the # of pending acknowledgments in the TBE entry
+		n_popResponseQueue;	//Pop the message from the response queue
+	}
+	
+	transition(IM_AD, Data_from_Dir_Ack_Cnt_Last, M) {
+		u_writeDataToCache;	//Data reply received, copy the data block to the previously cache entry
+		q_updateAckCount;	//Update the # of pending acknowledgments in the TBE entry
+		sx_store_hit;		//Tell the core that a store has completed
+		w_deallocateTBE;	//Block is in stable state, deallocate the TBE entry
+		n_popResponseQueue;	//Pop the message from the response queue
+	}
+
+	transition(IM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, M) {
+		u_writeDataToCache;	//Data reply received, and no need to wait for ACKs, just copy the data block to the previously cache entry
+		sx_store_hit;		//Tell the core that a store has completed
+		w_deallocateTBE;	//Block is in stable state, deallocate the TBE entry
+		n_popResponseQueue;	//Pop the message from the response queue
+	}
+	
+	transition(S, Store, SM_AD){	//Send GetM to Dir
+		p_profileMiss;				//Cache miss (no access permission)
+		am_issueGetM;				//Issue a request for GetM to the directory
+		v_allocateTBE;				//Allocate a TBE entry
+		x_copyDataFromCacheToTBE;	//Copy data block from cache to TBE entry
+		m_popMandatoryQueue;		//Pop the message from the mandatory queue
+	}
+
+	transition(S, Replacement, SI_A) {	//Send putS to Dir
+		bs_issuePUTS;				//Issue a PUTS message to the directory
+		v_allocateTBE;				//Allocate a TBE entry
+		x_copyDataFromCacheToTBE;	//Copy data block from cache to TBE entry
+	}
+
+	transition(S, Inv, I) {	//Send inv-ack to Req
+		fi_sendInvAck;				//Send a invalidation ACK to the cache controller
+		h_deallocateL1CacheBlock;	//Deallocate L1 cache block
+		forward_eviction_to_cpu;	//Tell the core that block has been invalidated
+		o_popForwardedRequestQueue;	//Pop the message from the forwardRequestNetwork queue
+	}
+	
+	transition(SM_A, Inv_Ack) {
+		q_updateAckCount;	//Update the # of pending acknowledgments in the TBE entry
+		n_popResponseQueue;	//Pop the message from the response queue
+	}
+
+	transition(SM_A, Inv_Ack_all, M) {
+		q_updateAckCount;	//Update the # of pending acknowledgments in the TBE entry
+		w_deallocateTBE;	//Block is in stable state, deallocate the TBE entry
+		sx_store_hit;		//Tell the core that a store has completed
+		n_popResponseQueue;	//Pop the message from the response queue
+	}
+
+	transition(SM_AD, Inv, IM_AD) {	//Send inv-ack to req
+		fi_sendInvAck;				//Send a invalidation ACK to the cache controller
+		o_popForwardedRequestQueue;	//Pop the message from the forwardRequestNetwork queue
+	}
+
+	transition(SM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, M) {
+		u_writeDataToCache;	//Data reply is received and no need to wait for ACKs, just copy the data block to the previously cache entry
+		w_deallocateTBE;	//Block is in stable state, deallocate the TBE entry
+		sx_store_hit;		//Tell the core that a store has completed
+		n_popResponseQueue;	//Pop the message from the response queue
+	}
+
+	transition(SM_AD, Data_from_Dir_Ack_Cnt, SM_A) {
+		q_updateAckCount;	//Update the # of pending acknowledgments in the TBE entry
+		u_writeDataToCache;	//Data reply is received but still need to wait for ACKs, just copy the data block to the previously cache entry
+		n_popResponseQueue;	//Pop the message from the response queue
+	}
+	
+	transition(SM_AD, Data_from_Dir_Ack_Cnt_Last, M) {
+		u_writeDataToCache;	//Data reply received, copy the data block to the previously cache entry
+		q_updateAckCount;	//Update the # of pending acknowledgments in the TBE entry
+		sx_store_hit;		//Tell the core that a store has completed
+		w_deallocateTBE;	//Block is in stable state, deallocate the TBE entry
+		n_popResponseQueue;	//Pop the message from the response queue
+	}
+
+	transition(SM_AD, Inv_Ack) {
+		q_updateAckCount;	//Update the # of pending acknowledgments in the TBE entry
+		n_popResponseQueue;	//Pop the message from the response queue
+	}
+	
+	transition(M, Replacement, MI_A) {	//Send putM and data to Dir
+		bm_issuePUTM;				//Send PUTM message with data to the directory
+		v_allocateTBE;				//Allocate a TBE entry
+		x_copyDataFromCacheToTBE;	//Copy data block from cache to TBE entry
+	}
+
+	transition(M, Fwd_GetS, S) {	//Send data to Req and Dir
+		e_sendDataFromCacheToRequestor;	//Send a DATA_FORM_Owner reply to forwarded incoming coherence request
+		de_sendDataFromCacheToDir;		//Send a Data reply message to the directory for a cached block
+		o_popForwardedRequestQueue;		//Pop the message from the forwardedRequest queue
+	}
+
+	transition(M, Fwd_GetM, I) {	//Send data to Req
+		e_sendDataFromCacheToRequestor;	//Send a DATA_FORM_Owner reply to forwarded incoming coherence request
+		forward_eviction_to_cpu;		//Tell the core that the block has been invalidated
+		h_deallocateL1CacheBlock;		//Deallocate L1 cache block
+		o_popForwardedRequestQueue;		//Pop the message from the forwardedRequest queue
+	}
+
+	transition(MI_A, Fwd_GetS, SI_A) {	//Send data to Req and Dir
+		ee_sendDataFromTBEToRequestor;	//Send a DATA_FORM_Owner reply to forwarded incoming coherence request where Data block is in TBE
+		dee_sendDataFromTBEToDir;		//Send a DATA reply message to the directory for a block which is in transient state.
+		o_popForwardedRequestQueue;		//Pop the message from the forwardedRequest queue
+	}
+
+	transition({MI_A, SI_A, II_A}, WB_Ack, I) {	//***
+		forward_eviction_to_cpu;	//Tell the core that the block has been invalidated
+		w_deallocateTBE;			//Block is in stable state, deallocate the TBE entry
+		h_deallocateL1CacheBlock;	//Deallocate L1 cache block
+		o_popForwardedRequestQueue;	//Pop the message from the forwardedRequest queue
+	}
+
+	transition(MI_A, Fwd_GetM, II_A) {	//Send data to Req and Dir
+		ee_sendDataFromTBEToRequestor;	//Send a DATA_FORM_Owner reply to forwarded incoming coherence request where Data block is in TBE
+		o_popForwardedRequestQueue;		//Pop the message from the forwardedRequest queue
+	}
+
+	transition(SI_A, Inv, II_A) {
+		fi_sendInvAck;				//Send a invalidation ACK to the cache controller
+		o_popForwardedRequestQueue;	//Pop the message from the forwardedRequest queue
+	}
+	
+	
+}
+

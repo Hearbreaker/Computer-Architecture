@@ -1,0 +1,562 @@
+transition(I, {Load, Ifetch}, IS_D)
+  {
+    /* Actions we need to perform in order
+     * 1) call the action that the core-initiated request result in a cache miss (block is invalid)
+     * 2) Allocate a L1 cache block
+     * 3) Issue a request for read-only access to the directory
+     * 4) Allocate a TBE entry
+     * 5) pop the message from the mandatory incoming queue
+     */
+
+     // 1)
+     p_profileMiss;
+     // 2)
+     i_allocateL1CacheBlock;
+     // 3)
+     as_issueGetS;
+     // 4)
+     v_allocateTBE;
+     // 5)
+     m_popMandatoryQueue;
+  }
+
+  transition(I, Store, IM_AD)
+  {
+    /* Actions we need to perform in order
+     * 1) call the action that the core-initiated request result in a cache miss (block was invalid)
+     * 2) Allocate a L1 cache block
+     * 3) Issue a request for read-write access to the directory
+     * 4) Allocate a TBE entry
+     * 5) pop the message from the mandatory incoming queue
+     */
+
+     // 1)
+     p_profileMiss;
+     // 2)
+     i_allocateL1CacheBlock;
+     // 3)
+     am_issueGetM;
+     // 4)
+     v_allocateTBE;
+     // 5)
+     m_popMandatoryQueue;
+  }
+
+  transition ({I, IM_A, IM_AD, S, M, IS_D}, WB_Ack)
+  {
+    /* Actions we need to perform in order
+     * 1) Just pop the message from the forwardedRequestqueue.
+     */
+     o_popForwardedRequestQueue;
+  }
+
+  transition ({I, IM_AD}, Inv)
+  {
+    /* Actions we need to perform in order
+     * 1) Just pop the message from the forwardedRequestqueue.
+     */
+     fi_sendInvAck;
+     o_popForwardedRequestQueue;
+  }
+
+  transition(IS_D, {Load, Ifetch, Store, Replacement, Inv})
+  {
+      /* We need to stall */
+      z_stall;   
+  }
+
+  transition(IS_D, {Data_from_Dir_No_Acks, Data_from_Owner}, S)
+  {
+     /* Actions we need to perform in order
+     * 1) Data reply is received, so copy the data block to the previously cache entry
+     * 2) Inform the local core that a load has completed. We had a cache miss initially.
+     * 3) The block is now in a stable coherence state and resides in the cache. So deallocate the TBE entry.
+     * 4) pop the message from the responseNetwork queue.
+     */
+
+     // 1)
+     u_writeDataToCache;
+     // 2)
+     rx_load_hit;
+     // 3)
+     w_deallocateTBE;
+     // 4)
+     n_popResponseQueue;
+  }
+
+  transition(IM_AD, {Load, Ifetch, Store, Replacement, Fwd_GetS, Fwd_GetM})
+  {
+      /* We need to stall */
+      z_stall;   
+  }
+
+
+  transition(IM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, M)
+  {
+     /* Actions we need to perform in order
+     * 1) Data reply is received and we do not need wait for ACKs, so copy the data block to the previously cache entry
+     * 2) Inform the local core that a store has completed. We had a cache miss initially.
+     * 3) The block is now in a stable coherence state and resides in the cache. So deallocate the TBE entry.
+     * 4) pop the message from the responseNetwork queue.
+     */
+
+     // 1)
+     u_writeDataToCache;
+     // 2)
+     sx_store_hit;
+     // 3)
+     w_deallocateTBE;
+     // 4)
+     n_popResponseQueue;
+  }
+
+  transition(IM_AD, Data_from_Dir_Ack_Cnt, IM_A)
+  {
+     /* Actions we need to perform in order
+     * 1) Data reply is received but we do need to wait for ACKs, so just copy the data block to the previously cache entry
+     * 2) Update the number of pending acknowledgments in the TBE entry
+     * 3) pop the message from the responseNetwork queue.
+     */
+
+     // 1)
+     u_writeDataToCache;
+     // 2)
+     q_updateAckCount;
+     // 3)
+     n_popResponseQueue;
+  }
+
+  transition(IM_AD, Inv_Ack)
+  {
+     /* Actions we need to perform in order
+     * 1) Update the number of pending acknowledgments in the TBE entry
+     * 2) pop the message from the responseNetwork queue.
+     */
+
+     // 1)
+     q_updateAckCount;
+     // 2)
+     n_popResponseQueue;
+  }
+
+
+  transition(IM_A, {Load, Ifetch, Store, Replacement, Fwd_GetS, Fwd_GetM})
+  {
+      /* We need to stall */
+      z_stall;   
+  }
+
+
+  transition(IM_A, Inv_Ack)
+  {
+     /* Actions we need to perform in order
+     * 1) Update the number of pending acknowledgments in the TBE entry
+     * 2) pop the message from the responseNetwork queue.
+     */
+
+     // 1)
+     q_updateAckCount;
+     // 2)
+     n_popResponseQueue;
+  }
+
+
+  transition(IM_A, Inv_Ack_all, M)
+  {
+     /* Actions we need to perform in order
+     * 1) Update the number of pending acknowledgments in the TBE entry
+     * 2) Since all ACKs are received, store has completed and we can safely inform the local core. (Block was invalid)
+     * 3) The block is now in a stable coherence state and resides in the cache. So deallocate the TBE entry.
+     * 4) pop the message from the responseNetwork queue.
+     */
+
+     // 1)
+     q_updateAckCount;
+     // 2)
+     sx_store_hit;
+     // 3)
+     w_deallocateTBE;
+     // 4)
+     n_popResponseQueue;
+  }
+
+  transition(S, {Load, Ifetch})
+  {
+    /* Actions we need to perform in order
+     * 1) Data block is present with the read permission. So inform the local core that the load has completed
+     * 2) pop the message from the mandatory queue.
+     */
+
+     // 1)
+     r_load_hit;
+     // 2)
+     m_popMandatoryQueue;
+  }
+
+  transition(S, Store, SM_AD)
+  {
+    /* Actions we need to perform in order
+     * 1) call the action that the core-initiated request result in a cache miss (Does not have proper access permissions)
+     * 2) Issue a request for read-write access
+     * 3) Allocate a TBE entry
+     * 4) Copy the data block from the cache to the TBE entry
+     * 5) pop the message from the mandatory queue.
+     */ 
+
+     // 1)
+     p_profileMiss;
+     // 2)
+     am_issueGetM;
+     // 3)
+     v_allocateTBE;
+     // 4)
+     x_copyDataFromCacheToTBE;
+     // 5) 
+     m_popMandatoryQueue; 
+  }
+
+  transition(S, Replacement, SI_A)
+  {
+    /* Actions we need to perform in order
+     * 1) Issue a PUTS message to the directory, along with the data, upon local replacement of a shared block
+     * 2) Allocate a TBE entry
+     * 3) We won't be asked to provide data in SI_A and II_A states. So We do not copy the data block from the cache to the TBE entry
+     */ 
+
+     // 1) 
+     bs_issuePUTS;
+     // 2)
+     v_allocateTBE;
+  }
+
+  transition(S, Inv, I)
+  {
+    /* Actions we need to perform in order
+     * 1) Send a single invalidation ACK to the remote cache controller
+     * 2) Deallocate L1 cache block upon receiving cache invalidation
+     * 3) Inform the core that block was invalidated 
+     * 4) pop the message from the forwardRequestNetwork queue.
+     */
+
+     // 1)
+     fi_sendInvAck;
+     // 2)
+     h_deallocateL1CacheBlock;
+     // 3)
+     forward_eviction_to_cpu;
+     // 4)
+     o_popForwardedRequestQueue;
+  }
+
+  transition(SM_AD, {Load, Ifetch})
+  {
+    /* Actions we need to perform in order
+     * 1) Inform the local core that the load has completed. 
+     * 2) pop the message from the mandatory queue.
+     */
+
+     // 1)
+     r_load_hit;
+     // 2)
+     m_popMandatoryQueue;
+  }
+
+  transition(SM_AD, {Store, Replacement, Fwd_GetS, Fwd_GetM})
+  {
+      /* We need to stall */
+      z_stall; 
+  }
+
+  transition(SM_AD, Inv, IM_AD)
+  {
+    /* Actions we need to perform in order
+     * 1) Send a signle invalidation ACK 
+     * 2) pop the message from the forwardedRequestqueue.
+     */
+
+     // 1)
+     fi_sendInvAck;
+     // 2)
+     o_popForwardedRequestQueue;
+  }
+
+
+  transition(SM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, M)
+  {
+     /* Actions we need to perform in order
+     * 1) Data reply is received and we do not need wait for ACKs, so copy the data block to the previously cache entry
+     * 2) Inform the local core that a store has completed. We read only permission initially.
+     * 3) The block is now in a stable coherence state and resides in the cache. So deallocate the TBE entry.
+     * 4) pop the message from the responseNetwork queue.
+     */
+
+     // 1)
+     u_writeDataToCache;
+     // 2)
+     sx_store_hit;
+     // 3)
+     w_deallocateTBE;
+     // 4)
+     n_popResponseQueue;
+  }
+
+  transition(SM_AD, Data_from_Dir_Ack_Cnt, SM_A)
+  {
+    /* Actions we need to perform in order
+     * 1) Data reply is received but we do need to wait for ACKs, so just copy the data block to the previously cache entry
+     * 2) Update the number of pending acknowledgments in the TBE entry
+     * 3) pop the message from the responseNetwork queue.
+     */
+
+     // 1)
+     u_writeDataToCache;
+     // 2)
+     q_updateAckCount;
+     // 3)
+     n_popResponseQueue;
+  }
+
+  transition({IM_AD, SM_AD}, Data_from_Dir_Ack_Cnt_Last, M)
+  {
+      //Data from Directory, along with Ack Count, arrive after Inv_Ack
+
+    /* Actions we need to perform in order
+     * 1) Update the number of pending acknowledgements in a TBE entry
+     * 2) When a DATA reply is received, copy the data block to the previously allocated cache entry
+     * 3) Inform the local core that a store has completed. The block was present but with read-only permissions or was invalid.
+     * 4) Deallocate a TBE entry
+     * 5) Dequeue a request from the responseNetwork queue
+     */
+
+     // 1)
+     q_updateAckCount;
+     // 2) 
+     u_writeDataToCache;
+     //3)
+     sx_store_hit;
+     // 4)
+     w_deallocateTBE;
+     // 5) 
+     n_popResponseQueue;
+
+  }
+
+  transition(SM_AD, Inv_Ack)
+  {
+     /* Actions we need to perform in order
+     * 1) Update the number of pending acknowledgments in the TBE entry
+     * 2) pop the message from the responseNetwork queue.
+     */
+
+     // 1)
+     q_updateAckCount;
+     // 2)
+     n_popResponseQueue;
+  }
+
+  transition(SM_A, {Load, Ifetch})
+  {
+    /* Actions we need to perform in order
+     * 1) Inform the local core that the load has completed. 
+     * 2) pop the message from the mandatory queue.
+     */
+
+     // 1)
+     r_load_hit;
+     // 2)
+     m_popMandatoryQueue;
+  }
+
+  transition(SM_A, {Store, Replacement, Fwd_GetS, Fwd_GetM})
+  {
+      /* We need to stall */
+      z_stall; 
+  }
+
+  transition(SM_A, Inv_Ack)
+  {
+     /* Actions we need to perform in order
+     * 1) Update the number of pending acknowledgments in the TBE entry
+     * 2) pop the message from the responseNetwork queue.
+     */
+
+     // 1)
+     q_updateAckCount;
+     // 2)
+     n_popResponseQueue;
+  }
+
+  transition(SM_A, Inv_Ack_all, M)
+  {
+     /* Actions we need to perform in order
+     * 1) Update the number of pending acknowledgments in the TBE entry
+     * 2) Since all ACKs are received, store has completed and we can safely inform the local core. (Block was read only)
+     * 3) The block is now in a stable coherence state and resides in the cache. So deallocate the TBE entry.
+     * 4) pop the message from the responseNetwork queue.
+     */
+
+     // 1)
+     q_updateAckCount;
+     // 2)
+     sx_store_hit;
+     // 3)
+     w_deallocateTBE;
+     // 4)
+     n_popResponseQueue;
+  }
+
+  transition(M, {Load, Ifetch})
+  {
+    /* Actions we need to perform in order
+     * 1) Data block is present with the read wirte permission. So inform the local core that the load has completed
+     * 2) pop the message from the mandatory queue.
+     */
+
+     // 1)
+     r_load_hit;
+     // 2)
+     m_popMandatoryQueue;
+  }
+
+
+  transition(M, Store)
+  {
+    /* Actions we need to perform in order
+     * 1) Data block is present with the read wirte permission. So inform the local core that the store has completed
+     * 2) pop the message from the mandatory queue.
+     */
+
+     // 1)
+     s_store_hit;
+     // 2)
+     m_popMandatoryQueue;
+  }
+
+  transition(M, Replacement, MI_A)
+  {
+    /* Actions we need to perform in order
+     * 1) Send PUTM message to the directory, along with data, upon local replacement
+     * 2) We'll move to a transient state so allocate a TBE entry
+     * 3) Copy data from the cache to the TBE entry. In MI_A might be asked to provid data to forwarded request
+     */
+
+     // 1)
+     bm_issuePUTM;
+     // 2)
+     v_allocateTBE;
+     // 3)
+     x_copyDataFromCacheToTBE;
+  }
+
+  transition(M, Fwd_GetS, S)
+  {
+    /* Actions we need to perform in order
+     * 1) Send a DATA_FORM_Owner reply to forwarded incoming coherence request. 
+     * 2) Send a Data reply message to the directory for a cached block
+     * 3) pop the message from the forwardedRequestqueue.
+     */
+
+     // 1)
+     e_sendDataFromCacheToRequestor;
+     //2)
+     de_sendDataFromCacheToDir;
+     //3)
+     o_popForwardedRequestQueue;
+  }
+
+
+  transition(M, Fwd_GetM, I)
+  {
+    /* Actions we need to perform in order
+     * 1) Send a DATA_FORM_Owner reply to forwarded incoming coherence request. 
+     * 2) Inform the core that the block was invalidated.
+     * 3) Deallocate the L1 cache block
+     * 4) pop the message from the forwardedRequestqueue.
+     */
+
+     // 1)
+     e_sendDataFromCacheToRequestor;
+     // 2)
+     forward_eviction_to_cpu;
+     // 3)
+     h_deallocateL1CacheBlock;
+     // 4)
+     o_popForwardedRequestQueue;
+  }
+
+  transition(MI_A, {Load, Ifetch, Store, Replacement})
+  {
+      /* We need to stall */
+      z_stall; 
+  }
+
+
+  transition(MI_A, Fwd_GetS, SI_A)
+  {
+    /* Actions we need to perform in order
+     * 1) Send a DATA_FORM_Owner reply to forwarded incoming coherence request. The Data block is in TBE. 
+     * 2) Send a DATA reply message to the directory for a block in transient state.
+     * 3) pop the message from the forwardedRequestqueue.
+     */
+
+     // 1)
+     ee_sendDataFromTBEToRequestor;
+     //2)
+     dee_sendDataFromTBEToDir;
+     //3)
+     o_popForwardedRequestQueue;
+  }
+
+
+
+  transition(MI_A, Fwd_GetM, II_A)
+  {
+    /* Actions we need to perform in order
+     * 1) Send a DATA_FORM_Owner reply to forwarded incoming coherence request. The Data block is in TBE. 
+     * 2) pop the message from the forwardedRequestqueue.
+     */
+
+     // 1)
+     ee_sendDataFromTBEToRequestor;
+     // 2)
+     o_popForwardedRequestQueue;
+  }
+
+  transition({MI_A, SI_A, II_A}, WB_Ack, I)
+  {
+    /* Actions we need to perform in order
+     * 1) Inform the core that a block was replaced
+     * 2) Deallocate the TBE entry.
+     * 3) Deallocate the L1 cache block
+     * 4) pop the message from the forwardedRequestqueue.
+     */
+
+     // 1)
+     forward_eviction_to_cpu;
+     // 2)
+     w_deallocateTBE;
+     // 3)
+     h_deallocateL1CacheBlock;
+     // 4)
+     o_popForwardedRequestQueue;
+  }
+
+
+  transition({SI_A, II_A}, {Load, Ifetch, Store, Replacement})
+  {
+      /* We need to stall */
+      z_stall; 
+  }
+
+  transition(SI_A, Inv, II_A)
+  {
+    /* Actions we need to perform in order
+     * 1) Send a single invalidation ACK
+     * 2) pop the message from the forwardedRequestqueue.
+     */
+
+     // 1)
+     fi_sendInvAck;
+     // 2)
+     o_popForwardedRequestQueue;
+  }
