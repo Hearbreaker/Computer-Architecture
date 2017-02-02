@@ -1,17 +1,12 @@
-You are allowed to submit only predictor.cc.
-So, any changes you make to the other files will not be reflected in
-our setup.
+Project 2 Dynamic Branch Prediction
 
+The objective of this project is to investigate the performance of different dynamic branch
+prediction schemes. 
 
-To compile:  
-============
-
-type make
-
-
-To run:
-===========
-
-./predictor <TRACE_FILE_PATH>
-
-
+Use the Championship Branch Prediction (CBP-4) simulator to determine the number of mispredictions
+per thousand instructions (MPKI) of the following predictors:
+• a 2-bit saturating counter predictor 
+• a two-level predictor that uses 2-bit saturating counters 
+• an open-ended predictor
+Simulate all three predictors on the following benchmarks: astar, bwaves, bzip2, gcc, gromacs,
+hmmer, mcf, and soplex. 
