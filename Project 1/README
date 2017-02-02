@@ -1,3 +1,20 @@
+Project 1 Hazards
+In this project, I will investigate the performance of a pipelined processor implementing
+the SimpleScalar PISA instruction set, which is similar to MIPS. Assume the five-stage pipeline
+implementation as described in class. The stages of the pipeline are Fetch (F), Decode (D), Execute
+(EX), Memory (M) and Writeback (WB). Assume that the Writeback stage writes to the register
+file (RF) in the first half of a cycle, while the Decode stage reads from the register file in the second
+half of a cycle.
+
+
+
+
+
+
+
+
+
+
 OVERVIEW:
 
 This README file is for the SimpleScalar simulator release 3.0.  This release
