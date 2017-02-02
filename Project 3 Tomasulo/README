@@ -1,7 +1,0 @@
-The objective of this project is to investigate the impact of Tomasulo’s dynamic scheduling
-algorithm on performance. 
-
-Problem Statement
-In this project, I used the SimpleScalar simulator to measure the total number of cycles
-it would take to run a benchmark with dynamic scheduling. Specifically, you are asked to simulate
-an in-order dispatch & dynamic scheduling Tomasulo’s algorithm with no speculation.

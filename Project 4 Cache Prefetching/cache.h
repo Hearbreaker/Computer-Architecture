@@ -53,7 +53,7 @@
 #define CACHE_H
 
 #include <stdio.h>
-#include <stdbool.h>
+
 #include "host.h"
 #include "misc.h"
 #include "machine.h"
@@ -147,58 +147,6 @@ struct cache_set_t
 };
 
 
-
-/* ECE552 Assignment 4 - BEGIN CODE */
-#define PREFETCH_DEGREE 10
-#define INDEX_TABLE_SIZE 64
-#define INDEX_OFFSET 8
-#define RPT_SIZE 16
-#define GHB_SIZE 128
-
-struct rpt{
-	struct rpt_entry *table;
-};
-
-struct rpt_entry{
-md_addr_t tag;
-md_addr_t prev_addr;
-md_addr_t stride;
-bool stride_sign;
-char state;
-};
-
-struct ghb{
-	struct ghb_entry *head;
-	struct ghb_entry *tail;
-};
-
-struct ghb_entry{
-  md_addr_t miss_address;
-  struct ghb_entry *next;
-  struct ghb_entry *prev;
-  struct ghb_entry *delta_next;
-  struct ghb_entry *delta_prev;
-  struct index_table_entry *back_link;
-};
-
-struct index_table_entry{
-  md_addr_t tag;
-  struct ghb_entry *linked_entry;
-};
-
-struct delta_buffer_entry{
-  int delta;
-  struct delta_buffer_entry *next;
-};
-
-bool prefetch_miss;
-md_addr_t get_it_tag(md_addr_t addr);
-
-
-/* ECE552 Assignment 4 - END CODE */
-
-
-
 /* cache definition */
 struct cache_t
 {
@@ -212,6 +160,10 @@ struct cache_t
   enum cache_policy policy;	/* cache replacement policy */
   unsigned int hit_latency;	/* cache hit latency */
   int prefetch_type;		/* prefetcher type */
+
+  /* ECE552 Assignment 4 - BEGIN CODE*/
+  int miss;
+  /* ECE552 Assignment 4 - END CODE*/
 
   /* miss/replacement handler, read/write BSIZE bytes starting at BADDR
      from/into cache block BLK, returns the latency of the operation
@@ -264,13 +216,6 @@ struct cache_t
   counter_t prefetch_misses;	/* total number of prefetch accesses that miss in this cache */
 
 
-	/* ECE552 Assignment 4 - BEGIN CODE */
-  struct rpt *rpt;
-  struct ghb *ghb;
-  struct index_table_entry *index_table;
-  struct delta_buffer_entry *delta_head;
-	/* ECE552 Assignment 4 - 	END CODE */
-
 
   /* last block to hit, used to optimize cache hit processing */
   md_addr_t last_tagset;	/* tag of last line accessed */
@@ -282,9 +227,9 @@ struct cache_t
   /* NOTE: this is a variable-size tail array, this must be the LAST field
      defined in this structure! */
   struct cache_set_t sets[1];	/* each entry is a set */
-
-
 };
+
+
 
 /* create and initialize a general cache structure */
 struct cache_t *			/* pointer to cache created */
@@ -388,10 +333,5 @@ unsigned int				/* latency of flush operation */
 cache_flush_addr(struct cache_t *cp,	/* cache instance to flush */
 		 md_addr_t addr,	/* address of block to flush */
 		 tick_t now);		/* time of cache flush */
-
-
-
-
-
 
 #endif /* CACHE_H */

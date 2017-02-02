@@ -58,6 +58,25 @@
 #include "machine.h"
 #include "cache.h"
 
+/* ECE552 Assignment 4 - BEGIN CODE*/
+struct ghb_entry
+{
+	md_addr_t address;
+	int next;
+	int stride;
+};
+
+
+#define DELTA_BUFFER_SIZE 128
+#define GHB_SIZE 256
+#define INDEX_TABLE_SIZE 64
+
+int delta_buffer[DELTA_BUFFER_SIZE];
+int index_table[INDEX_TABLE_SIZE];
+struct ghb_entry ghb[GHB_SIZE];
+
+/* ECE552 Assignment 4 - END CODE*/
+
 /* cache access macros */
 #define CACHE_TAG(cp, addr)	((addr) >> (cp)->tag_shift)
 #define CACHE_SET(cp, addr)	(((addr) >> (cp)->set_shift) & (cp)->set_mask)
@@ -256,9 +275,6 @@ update_way_list(struct cache_set_t *set,	/* set contained way chain */
     panic("bogus WHERE designator");
 }
 
-
-//struct rpt_entry_expand table [16];
-
 /* create and initialize a general cache structure */
 struct cache_t *			/* pointer to cache created */
 cache_create(char *name,		/* name of the cache */
@@ -279,6 +295,7 @@ cache_create(char *name,		/* name of the cache */
   struct cache_t *cp;
   struct cache_blk_t *blk;
   int i, j, bindex;
+
 
   /* check all cache parameters */
   if (nsets <= 0)
@@ -308,31 +325,7 @@ cache_create(char *name,		/* name of the cache */
     fatal("out of virtual memory");
 
 
-  /* ECE552 Assignment 4 - BEGIN CODE*/
-
-  if(prefetch_type==2){
-	cp->rpt = (struct rpt *)malloc(sizeof(struct rpt));
-	cp->rpt->table = (struct rpt_entry *)calloc(RPT_SIZE, sizeof(struct rpt_entry));
-
-	cp->ghb = (struct ghb *)malloc(sizeof(struct ghb));
-	cp->ghb->head = NULL;
-	cp->ghb->tail = NULL;
-	cp->index_table = (struct index_table_entry *)malloc(INDEX_TABLE_SIZE * sizeof(struct index_table_entry));
-	for(i = 0; i < INDEX_TABLE_SIZE; i++){
-		cp->index_table[i].linked_entry = NULL;
-		cp->index_table[i].tag = 0;
-	}
-
-
-  }
-  else{
-	  cp->rpt = (struct rpt *)malloc(sizeof(struct rpt));
-	  cp->rpt->table = (struct rpt_entry *)calloc(prefetch_type, sizeof(struct rpt_entry));
-  }
-
-
-  /* ECE552 Assignment 4 - END CODE*/
-
+  
   /* initialize user parameters */
   cp->name = mystrdup(name);
   cp->nsets = nsets;
@@ -380,6 +373,29 @@ cache_create(char *name,		/* name of the cache */
   /* blow away the last block accessed */
   cp->last_tagset = 0;
   cp->last_blk = NULL;
+
+    /* ECE552 Assignment 4 - BEGIN CODE*/
+  //initialize open ended tables
+  
+  for(i = 0; i < GHB_SIZE; i++){
+	  ghb[i].address = 0;
+	  ghb[i].next = 9999;
+	  //printf("next is: %d\n", ghb[i].next);
+	  ghb[i].stride = 0;
+  }
+  
+  for(i=0; i < INDEX_TABLE_SIZE; i++){
+  	index_table[i] = -1;
+  }
+
+  for(i = 0; i < DELTA_BUFFER_SIZE; i++){
+  	delta_buffer[i] = 0;
+  }
+  
+  cp->miss = 1;
+
+  
+  /* ECE552 Assignment 4 - END CODE*/
 
   /* allocate data blocks */
   cp->data = (byte_t *)calloc(nsets * assoc,
@@ -534,313 +550,172 @@ cache_reg_stats(struct cache_t *cp,	/* cache instance */
 
 }
 
+/* Next Line Prefetcher */
+void next_line_prefetcher(struct cache_t *cp, md_addr_t addr) {
+	
+	/* ECE552 Assignment 4 - BEGIN CODE*/
+	
+	md_addr_t baddr = CACHE_BADDR(cp, addr+cp->bsize);
 
-/* ECE552 Assignment 4 - BEGIN CODE*/
-void prefetch_address(struct cache_t *cp, md_addr_t addr){
-	md_addr_t baddr = CACHE_BADDR(cp, addr);
 	if(cache_probe(cp,baddr))
 		return;
 	else
 		cache_access(cp, Read, baddr, NULL, cp->bsize, NULL, NULL, NULL, 1);
-}
-/* ECE552 Assignment 4 - END CODE*/
-/* Next Line Prefetcher */
-void next_line_prefetcher(struct cache_t *cp, md_addr_t addr){
-	/* ECE552 Assignment 4 - BEGIN CODE*/
-	prefetch_address(cp, addr + (cp->bsize));
+	
 	/* ECE552 Assignment 4 - END CODE*/
+	
+	
 }
+md_addr_t get_PC();
+
+
 
 
 /* Open Ended Prefetcher */
 void open_ended_prefetcher(struct cache_t *cp, md_addr_t addr) {
-	/* ECE552 Assignment 4 - BEGIN CODE*/
+	
+	
 
-	int i;
-	int depth = PREFETCH_DEGREE;
-	int correlation_key[2] = {0};
-	int correlation_comparison[2] = {0};
-	int delta;
-	int delta_buffer_size = 0;
-	//reusing the stride prefetcher if the stride is stable
-	bool state_change = false;
-	md_addr_t pc = get_PC();
-	md_addr_t index = (pc >> 3) % 16;
-	//scenario 1
-	if(pc != cp->rpt->table[index].tag){
-		cp->rpt->table[index].tag = pc;
-		cp->rpt->table[index].prev_addr = addr;
-		cp->rpt->table[index].stride = 0;
-		cp->rpt->table[index].state = 'I';
-		cp->rpt->table[index].stride_sign = false;
+	//record address if miss
+	if(cp->miss){
+		md_addr_t pc = get_PC();
+		int index = (pc >> 3) % INDEX_TABLE_SIZE;
+		int i, j;
+		
+		assert(index_table[index] < GHB_SIZE);
+		//increment the FIFO
+		for(i = GHB_SIZE; i >= 1; i--){
+			//Last element is removed. Make sure the element pointing to it is cleared.
+			if(ghb[i].next + i == GHB_SIZE - 1){
+				//printf("*****************************************\n");
+				ghb[i].next = 9999;
+	
+			}
+			//shifting ghb by 1
+			ghb[i] = ghb[i-1];
+		}
+	
+		//FIXME: CHECK WHAT GHB AND INDEX TABLE ARE INITIALIZED TO
+		//Set the ADDR
+		ghb[0].address = addr;
+
+		//set NEXT
+		if(index == 2)
+			printf("1. index: %d ,index table: %d\n", index, index_table[index]+1);
+		if((index_table[index] != -1) && (index_table[index] < (GHB_SIZE - 1))){
+			
+			ghb[0].next = index_table[index] + 1;
+		}
+		else if(index_table[index] == GHB_SIZE - 1){
+			ghb[0].next = GHB_SIZE - 1;
+		}
+		else
+			ghb[0].next = 9999;
+
+		//printf("GHB next: %d\n", ghb[0].next );
+
+		//set STRIDE
+		if(ghb[0].next != 9999){
+			//printf("next is: %d\n", ghb[0].next);
+			ghb[0].stride = addr - ghb[ghb[0].next].address;
+		}
+		else{
+			ghb[0].stride = 0;
+
+		}
+
+		
+		//increment indexes of ghb stored in index table
+		for(i = 0; i < INDEX_TABLE_SIZE; i++){
+			if((index_table[i] != -1) && (index_table[i] < (GHB_SIZE - 1)))
+				index_table[i]++;
+
+		}
+		if(index == 2){
+			printf("2. index: %d ,index table: %d\n", index, index_table[index]+1);
+		}
+
+		index_table[index] = 0;
+
+		if(index == 2){
+			printf("3. index: %d ,index table: %d\n", index, index_table[index]+1);
+		}
+
+		if(ghb[0].stride == 0)
+			return; //Don't prefetch if only 1 entry;
+		
+
+		//clear delta buffer table
+		for(i=0; i < DELTA_BUFFER_SIZE; i++){
+			delta_buffer[i] = 0;
+		}
+		//printf("1next is: %d\n", ghb[i].next);
+		//populate delta table
+		j = 0;
+		i = 0; //FIXME: index is wrong
+		while( i < GHB_SIZE && j < DELTA_BUFFER_SIZE){
+			//printf("i is: %d\n",i);
+			delta_buffer[j] = ghb[i].stride;
+			//printf("2next is: %d\n", ghb[i].next);
+			
+			i+=ghb[i].next;
+			//printf("2next is: %d\n", ghb[i].next);
+			j++;
+		}
+
+		//printf("FIND THE PATTERN\n");
+		//find the the pattern
+		for(i = 3; i < DELTA_BUFFER_SIZE;i++){
+			if(delta_buffer[i] == delta_buffer[1] && delta_buffer[i-1] == delta_buffer[0]){
+				break;
+			}
+		}
+
+		//prefetch degree 4
+		if(delta_buffer[i-1]!=0 && delta_buffer[i-1]>= 0){
+			md_addr_t fetch = addr + delta_buffer[i-1];
+			md_addr_t baddr = CACHE_BADDR(cp, fetch);
+
+			if(cache_probe(cp,baddr))
+				return;
+			else
+				cache_access(cp, Read, baddr, NULL, cp->bsize, NULL, NULL, NULL, 1);
+		}
+		else if(delta_buffer[i-2]!=0 && delta_buffer[i-2]>= 0){
+			md_addr_t fetch = addr + delta_buffer[i-2];
+			md_addr_t baddr = CACHE_BADDR(cp, fetch);
+
+			if(cache_probe(cp,baddr))
+				return;
+			else
+				cache_access(cp, Read, baddr, NULL, cp->bsize, NULL, NULL, NULL, 1);
+		}
+		else if(delta_buffer[i-3]!=0 && delta_buffer[i-3]>= 0){
+			md_addr_t fetch = addr + delta_buffer[i-3];
+			md_addr_t baddr = CACHE_BADDR(cp, fetch);
+
+			if(cache_probe(cp,baddr))
+				return;
+			else
+				cache_access(cp, Read, baddr, NULL, cp->bsize, NULL, NULL, NULL, 1);
+		}
+		else if(delta_buffer[i-4]!=0 && delta_buffer[i-4] >= 0){
+			md_addr_t fetch = addr + delta_buffer[i-4];
+			md_addr_t baddr = CACHE_BADDR(cp, fetch);
+
+			if(cache_probe(cp,baddr))
+				return;
+			else
+				cache_access(cp, Read, baddr, NULL, cp->bsize, NULL, NULL, NULL, 1);
+		}
 	}
-	//scenario 2
-	else{
-		md_addr_t prev_addr = cp->rpt->table[index].prev_addr;
-		md_addr_t stride = cp->rpt->table[index].stride;
-		md_addr_t new_stride = MAX(addr, prev_addr) - MIN(addr, prev_addr);
-		char state = cp->rpt->table[index].state;
-		bool stride_sign = cp->rpt->table[index].stride_sign;
-		bool new_stride_sign = (addr >= prev_addr);
 
-		if(state == 'I' && !state_change){
-			if(stride==new_stride && stride_sign==new_stride_sign){
-				cp->rpt->table[index].state = 'S';
-			}
-			else{
-				cp->rpt->table[index].state = 'T';
-				cp->rpt->table[index].stride = new_stride;
-				cp->rpt->table[index].stride_sign = new_stride_sign;
-			}
-			state_change = true;
-		}
-		else if(state == 'S'&& !state_change){
-			if(stride==new_stride && stride_sign==new_stride_sign){
-			}
-			else{
-				cp->rpt->table[index].state = 'I';
-
-			}
-			state_change = true;
-		}
-		else if(state == 'T' && !state_change){
-			if(stride==new_stride && stride_sign==new_stride_sign){
-				cp->rpt->table[index].state = 'S';
-			}
-			else{
-				cp->rpt->table[index].state = 'N';
-				cp->rpt->table[index].stride = new_stride;
-				cp->rpt->table[index].stride_sign = new_stride_sign;
-			}
-			state_change = true;
-		}
-		else if(state == 'N' && !state_change){
-			if(stride==new_stride && stride_sign==new_stride_sign){
-				cp->rpt->table[index].state = 'T';
-			}
-			else{
-				cp->rpt->table[index].stride = new_stride;
-				cp->rpt->table[index].stride_sign = new_stride_sign;
-			}
-			state_change = true;
-		}
-
-		cp->rpt->table[index].tag = pc;
-		cp->rpt->table[index].prev_addr = addr;
-		if(cp->rpt->table[index].state == 'S'){
-			if(cp->rpt->table[index].stride_sign){
-				prefetch_address(cp, addr + cp->rpt->table[index].stride);
-			}
-			else{
-				prefetch_address(cp, addr - cp->rpt->table[index].stride);
-			}
-			return;
-		}
-	}
-
-	if(prefetch_miss){// Use Correlation Prefetcher if Stride Prefetcher is not stable
-			//insert at GHB head
-			struct ghb_entry *new_entry = (struct ghb_entry *)malloc(sizeof(struct ghb_entry));
-			new_entry->miss_address = addr;
-			new_entry->delta_next = NULL;
-			new_entry->delta_prev = NULL;
-			new_entry->next = cp->ghb->head;
-			new_entry->prev = NULL;
-
-			int index = (addr >> INDEX_OFFSET) % INDEX_TABLE_SIZE;
-			md_addr_t tag = addr>>16;
-
-			if(cp->ghb->head != NULL)
-				cp->ghb->head->prev = new_entry;
-			cp->ghb->head = new_entry;
-
-			if(cp->ghb->tail == NULL || cp->ghb->tail == cp->ghb->head){
-				cp->ghb->tail = new_entry;
-			}
-
-			new_entry->back_link = &(cp->index_table[index]);	//ghb entry points to a index table entry
-
-			if(cp->index_table[index].linked_entry == NULL){//empty
-				cp->index_table[index].linked_entry = new_entry;
-				cp->index_table[index].tag = tag;
-			}
-
-			else if(cp->index_table[index].tag == tag){//hit
-				new_entry->delta_prev = NULL;
-				new_entry->delta_next = cp->index_table[index].linked_entry;
-				cp->index_table[index].linked_entry->delta_prev = new_entry;
-				cp->index_table[index].linked_entry = new_entry;
-
-
-				correlation_key[0] = addr - cp->ghb->head->delta_next->miss_address;//set correlation key
-				if(cp->ghb->head->delta_next->delta_next != NULL){
-					correlation_key[1] = cp->ghb->head->delta_next->miss_address - cp->ghb->head->delta_next->delta_next->miss_address;	//set correlation key register
-				}
-				else{
-					return;	//history too short
-				}
-
-				if(correlation_key[0] == correlation_key[1]){//same delta
-					for(i = 1; i < PREFETCH_DEGREE; i++){
-						prefetch_address(cp, addr + i * correlation_key[0]);
-					}
-					return;
-				}
-				i=0;
-				//different delta
-
-				//construct delta buffer
-					struct ghb_entry * iterate = cp->ghb->head;
-					struct delta_buffer_entry *new_delta;
-					while(iterate != NULL){
-						if(iterate->delta_next != NULL){
-							new_delta = (struct delta_buffer_entry *)malloc(sizeof(struct delta_buffer_entry));
-							new_delta->next = cp->delta_head;
-							cp->delta_head = new_delta;
-							new_delta->delta = (iterate->miss_address) - (iterate->delta_next->miss_address);
-							delta_buffer_size++;
-						}
-						iterate = iterate->delta_next;
-					}
-
-				md_addr_t new_addr = addr;
-				struct delta_buffer_entry *temp = cp->delta_head;
-
-				while(i < delta_buffer_size - 1){
-					correlation_comparison[1] = temp->delta;
-					correlation_comparison[0] = temp->next->delta;
-					if(correlation_comparison[0] == correlation_key[0] && correlation_comparison[1] == correlation_key[1]){
-							temp = temp->next->next;
-							while(depth > 0 && temp != NULL){
-								new_addr += temp->delta;	//compute new address
-								prefetch_address(cp, new_addr);
-								depth--;
-								temp = temp->next;
-							}
-							struct delta_buffer_entry *del;
-							while(cp->delta_head != NULL){
-								del = cp->delta_head;
-								cp->delta_head = cp->delta_head->next;
-								free(del);
-							}
-							cp->delta_head = NULL;
-							return;
-					}
-					else{
-						temp = temp->next;
-					}
-					i++;
-				}
-			}
-
-			else{//collision
-				struct ghb_entry *temp = cp->index_table[index].linked_entry;
-				struct ghb_entry *temp_next;
-				while(temp != NULL){
-					if(temp == cp->ghb->tail){
-						cp->ghb->tail = temp->prev;
-					}
-
-					if(temp->next != NULL)
-						temp->next->prev = temp->prev;
-					if(temp->prev != NULL)
-						temp->prev->next = temp->next;
-
-					temp_next = temp->delta_next;
-					temp = temp_next;
-				}
-				//set the new linked entry
-				cp->index_table[index].linked_entry = new_entry;
-				//set the new tag
-				cp->index_table[index].tag = tag;
-			}
-		}
-
-	/* ECE552 Assignment 4 - END CODE*/
+	//printf("EXIT\n");
 }
-
 
 /* Stride Prefetcher */
 void stride_prefetcher(struct cache_t *cp, md_addr_t addr) {
-	/* ECE552 Assignment 4 - BEGIN CODE*/
-	bool state_change = false;
-	md_addr_t pc = get_PC();
-	md_addr_t index = (pc >> 3) % cp->prefetch_type;
-    //scenario 1
-	if(pc != cp->rpt->table[index].tag){
-		cp->rpt->table[index].tag = pc;
-		cp->rpt->table[index].prev_addr = addr;
-		cp->rpt->table[index].stride = 0;
-		cp->rpt->table[index].state = 'I';
-		cp->rpt->table[index].stride_sign = false;
-		return;
-	}
-
-	//scenario 2
-		else{
-		md_addr_t prev_addr = cp->rpt->table[index].prev_addr;
-		md_addr_t stride = cp->rpt->table[index].stride;
-		md_addr_t new_stride = MAX(addr, prev_addr) - MIN(addr, prev_addr);
-		char state = cp->rpt->table[index].state;
-		bool stride_sign = cp->rpt->table[index].stride_sign;
-		bool new_stride_sign = (addr >= prev_addr);
-
-		if(state == 'I' && !state_change){
-			if(stride==new_stride && stride_sign==new_stride_sign){
-				cp->rpt->table[index].state = 'S';
-			}
-			else{
-				cp->rpt->table[index].state = 'T';
-				cp->rpt->table[index].stride = new_stride;
-				cp->rpt->table[index].stride_sign = new_stride_sign;
-			}
-			state_change = true;
-		}
-		else if(state == 'S'&& !state_change){
-			if(stride==new_stride && stride_sign==new_stride_sign){
-			}
-			else{
-				cp->rpt->table[index].state = 'I';
-
-			}
-			state_change = true;
-		}
-		else if(state == 'T' && !state_change){
-			if(stride==new_stride && stride_sign==new_stride_sign){
-				cp->rpt->table[index].state = 'S';
-			}
-			else{
-				cp->rpt->table[index].state = 'N';
-				cp->rpt->table[index].stride = new_stride;
-				cp->rpt->table[index].stride_sign = new_stride_sign;
-			}
-			state_change = true;
-		}
-		else if(state == 'N' && !state_change){
-			if(stride==new_stride && stride_sign==new_stride_sign){
-				cp->rpt->table[index].state = 'T';
-			}
-			else{
-				cp->rpt->table[index].stride = new_stride;
-				cp->rpt->table[index].stride_sign = new_stride_sign;
-			}
-			state_change = true;
-		}
-
-		cp->rpt->table[index].tag = pc;
-		cp->rpt->table[index].prev_addr = addr;
-		if(cp->rpt->table[index].state != 'N'){
-			if(cp->rpt->table[index].stride_sign){
-				prefetch_address(cp, addr + cp->rpt->table[index].stride);
-			}
-			else{
-				prefetch_address(cp, addr - cp->rpt->table[index].stride);
-			}
-		}
-	}
-/* ECE552 Assignment 4 - END CODE*/
-
-
+	; 
 }
 
 
@@ -867,7 +742,6 @@ void generate_prefetch(struct cache_t *cp, md_addr_t addr) {
 
 }
 
-//	md_addr_t get_PC();
 
 /* print cache stats */
 void
@@ -910,7 +784,6 @@ cache_access(struct cache_t *cp,	/* cache to access */
   struct cache_blk_t *blk, *repl;
   int lat = 0;
 
-  prefetch_miss = 0;
   /* default replacement address */
   if (repl_addr)
     *repl_addr = 0;
@@ -960,13 +833,19 @@ cache_access(struct cache_t *cp,	/* cache to access */
 	}
     }
 
+     /* ECE552 Assignment 4 - BEGIN CODE*/
+ 	cp->miss = 0;
+ 	 /* ECE552 Assignment 4 - END CODE*/
+
   /* cache block not found */
 
   /* **MISS** */
   if (prefetch == 0 ) {
-
+  	 /* ECE552 Assignment 4 - BEGIN CODE*/
+ 	 cp->miss = 1;
+ 	 /* ECE552 Assignment 4 - END CODE*/
      cp->misses++;
-     prefetch_miss = 1;
+
      if (cmd == Read) {	
 	cp->read_misses++;
      }
