@@ -1,0 +1,6 @@
+Project 4 Cache Prefetching
+
+The objective of this project is to investigate the impact of data prefetchers on cache performance.
+In this Project, I used the SimpleScalar cache simulator (sim-cache) to investigate the
+performance of three data cache prefetchers: (a) the next-line prefetcher, (b) the stride prefetcher,
+and (c) an open-ended prefetcher of your own design.
