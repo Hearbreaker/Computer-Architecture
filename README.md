@@ -1,0 +1,2 @@
+# Computer-Architecture
+Performance analysis and metrics and cost. Instruction set architectures. Instruction-level parallelism: pipelining, superscalar, dynamic scheduling, VLIW processors. Data-level prallelism: vector processors, GPUs. Thread-level parallelism: multiprocessors, multi-core, coherence, simultaneous multi-threading. Memory hierarchies: caches and virtual memory support. Simulation tools and methods. Limited Enrollment.
